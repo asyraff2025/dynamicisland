@@ -1,9 +1,13 @@
 package com.acapan.island
 
 import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -37,7 +41,30 @@ class IslandNotificationService : NotificationListenerService() {
         watchMedia(list)
     }
 
+    /** Run as a foreground service so HyperOS is less eager to kill the process. */
+    private fun goForeground() {
+        try {
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(
+                NotificationChannel("island_keepalive", "Island running", NotificationManager.IMPORTANCE_MIN)
+            )
+            val n = Notification.Builder(this, "island_keepalive")
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Island is running")
+                .setOngoing(true)
+                .build()
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            } else {
+                startForeground(1, n)
+            }
+        } catch (_: Exception) {
+            // not allowed right now: carry on without it
+        }
+    }
+
     override fun onListenerConnected() {
+        goForeground()
         if (Prefs.alwaysOn(this)) IslandController.start(this)
         try {
             val msm = getSystemService(MediaSessionManager::class.java)
@@ -51,6 +78,10 @@ class IslandNotificationService : NotificationListenerService() {
     }
 
     override fun onListenerDisconnected() {
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (_: Exception) {
+        }
         try {
             sessionManager?.removeOnActiveSessionsChangedListener(sessionsListener)
         } catch (_: Exception) {
