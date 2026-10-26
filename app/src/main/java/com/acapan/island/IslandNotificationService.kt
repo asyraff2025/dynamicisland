@@ -70,15 +70,25 @@ class IslandNotificationService : NotificationListenerService() {
 
     /** Hide the idle pill while music is playing or a call/alarm/navigation notification is active. */
     private fun refreshYield(excludeKey: String? = null) {
-        val playing = controllers.any { it.playbackState?.state == PlaybackState.STATE_PLAYING }
-        val special = try {
-            activeNotifications?.any {
-                it.key != excludeKey && it.notification.category in yieldCategories
-            } == true
-        } catch (_: Exception) {
-            false
+        var reason: String? = null
+
+        val player = controllers.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+        if (player != null) reason = "music playing (${player.packageName})"
+
+        if (reason == null) {
+            try {
+                val hit = activeNotifications?.firstOrNull {
+                    it.key != excludeKey &&
+                        (it.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0 &&
+                        it.notification.category in yieldCategories
+                }
+                if (hit != null) reason = "${hit.packageName} notification (${hit.notification.category})"
+            } catch (_: Exception) {
+            }
         }
-        IslandController.setYield(this, playing || special)
+
+        IslandController.yieldReason = reason ?: ""
+        IslandController.setYield(this, reason != null)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {

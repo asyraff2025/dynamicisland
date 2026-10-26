@@ -60,6 +60,14 @@ object IslandController {
     // true while the system island is busy (music, call, alarm...). We stay out of its way.
     private var yielding = false
 
+    /** Why we are yielding, shown in the app's status text. Set by the notification service. */
+    var yieldReason: String = ""
+
+    fun describe(): String {
+        val where = if (root == null) "Pill: not on screen" else "Pill: on screen (${state.name.lowercase()})"
+        return if (yielding) "$where\nHidden because: ${yieldReason.ifBlank { "unknown" }}" else where
+    }
+
     // ---------------------------------------------------------------- public API
 
     /** Show the idle pill (always-on). Safe to call repeatedly, it also re-applies size/position. */
@@ -196,6 +204,7 @@ object IslandController {
         val b = bg ?: return
         val v = root ?: return
 
+        b.setColor(Color.BLACK)
         main.removeCallbacks(autoHide)
         current = data
         last = data
@@ -242,6 +251,7 @@ object IslandController {
         val p = pill ?: return
         val b = bg ?: return
         main.removeCallbacks(autoHide)
+        b.setColor(if (Prefs.debugColor(ctx)) Color.RED else Color.BLACK)
         state = State.IDLE
         current = null
         hideContent()

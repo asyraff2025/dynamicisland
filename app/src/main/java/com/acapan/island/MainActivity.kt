@@ -28,6 +28,8 @@ class MainActivity : Activity() {
         status = TextView(this).apply { textSize = 16f }
         col.addView(status)
 
+        col.addView(button("Refresh status") { refreshStatus() })
+
         col.addView(button("1. Allow display over other apps") {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         })
@@ -42,6 +44,18 @@ class MainActivity : Activity() {
             setOnCheckedChangeListener { _, on ->
                 Prefs.setAlwaysOn(this@MainActivity, on)
                 if (on) IslandController.start(this@MainActivity) else IslandController.stop()
+                status.postDelayed({ refreshStatus() }, 600)
+            }
+        })
+
+        col.addView(Switch(this).apply {
+            text = "Debug: show idle pill in red"
+            isChecked = Prefs.debugColor(this@MainActivity)
+            setPadding(0, dp(8), 0, dp(4))
+            setOnCheckedChangeListener { _, on ->
+                Prefs.setDebugColor(this@MainActivity, on)
+                if (Prefs.alwaysOn(this@MainActivity)) IslandController.start(this@MainActivity)
+                status.postDelayed({ refreshStatus() }, 600)
             }
         })
 
@@ -62,11 +76,19 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         val overlay = Settings.canDrawOverlays(this)
+        if (overlay && Prefs.alwaysOn(this)) IslandController.start(this)
+        status.postDelayed({ refreshStatus() }, 600)
+        refreshStatus()
+    }
+
+    private fun refreshStatus() {
+        val overlay = Settings.canDrawOverlays(this)
         val listener = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
             ?.contains(packageName) == true
         status.text = "Overlay permission: ${if (overlay) "OK" else "missing"}\n" +
-            "Notification access: ${if (listener) "OK" else "missing"}"
-        if (overlay && Prefs.alwaysOn(this)) IslandController.start(this)
+            "Notification access: ${if (listener) "OK" else "missing"}\n" +
+            "Always-on: ${if (Prefs.alwaysOn(this)) "on" else "off"}\n" +
+            IslandController.describe()
     }
 
     private fun test() {
@@ -80,6 +102,8 @@ class MainActivity : Activity() {
                 icon = getDrawable(android.R.drawable.sym_def_app_icon)
             )
         )
+        // check the state again after the pill has had time to settle back
+        status.postDelayed({ refreshStatus() }, 4500)
     }
 
     private fun label(t: String) = TextView(this).apply {
